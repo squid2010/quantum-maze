@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://0g4wr2meuvjg"]
+
+[ext_resource type="PackedScene" uid="uid://de3d4r3wvf5ho" path="res://scenes/MazeGenerator.tscn" id="1_0wfyh"]
+[ext_resource type="PackedScene" uid="uid://cnikgwgggeeu2" path="res://scenes/player.tscn" id="2_sugp2"]
+
+[node name="main" type="Node2D"]
+
+[node name="MazeGenerator" parent="." instance=ExtResource("1_0wfyh")]
+
+[node name="Player" parent="." instance=ExtResource("2_sugp2")]
