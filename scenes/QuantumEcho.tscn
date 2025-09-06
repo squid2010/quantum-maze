@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://doq420km2cfhi"]
+
+[ext_resource type="Script" uid="uid://nreu7k641rh5" path="res://scripts/QuantumEcho.gd" id="1_0wxir"]
+
+[node name="QuantumEcho" type="Sprite2D"]
+scale = Vector2(0.25, 0.25)
+script = ExtResource("1_0wxir")
