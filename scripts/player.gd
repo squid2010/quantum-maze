@@ -43,6 +43,8 @@ func _ready():
 	remaining_recording_time = max_recording_time
 	
 	maze = get_parent().get_node("MazeGenerator")
+	maze.level_generated.connect(reset_to_start) # Connect to the signal
+	
 	_set_grid_position(Vector2i(1, 1))
 	current_position_start_time = Time.get_unix_time_from_system()
 	_check_plate_interaction()
@@ -191,9 +193,15 @@ func _stop_recording():
 		return
 	
 	is_recording = false
-	var recording_duration = Time.get_unix_time_from_system() - recording_start_time
 	
-	if position_history.size() > 1:
+	# Record the time spent in the final position
+	var current_time = Time.get_unix_time_from_system()
+	var time_spent_in_last_cell = current_time - current_position_start_time
+	_record_timing(time_spent_in_last_cell)
+	
+	var recording_duration = current_time - recording_start_time
+	
+	if position_history.size() > 0:
 		echo_state = EchoState.PLAYBACK_READY
 		print("Recording stopped! Used ", "%.1f" % recording_duration, "s")
 		print("Remaining time: ", "%.1f" % remaining_recording_time, "s")
@@ -213,7 +221,12 @@ func _force_stop_recording():
 	
 	is_recording = false
 	
-	if position_history.size() > 1:
+	# Record the time spent in the final position
+	var current_time = Time.get_unix_time_from_system()
+	var time_spent_in_last_cell = current_time - current_position_start_time
+	_record_timing(time_spent_in_last_cell)
+	
+	if position_history.size() > 0:
 		echo_state = EchoState.PLAYBACK_READY
 		print("Recording time exhausted! Press quantum echo to replay")
 	else:
@@ -221,7 +234,7 @@ func _force_stop_recording():
 		print("Recording time exhausted with no movement recorded")
 
 func _activate_echo():
-	if position_history.size() <= 1:
+	if position_history.size() == 0:
 		print("No recorded sequence available!")
 		echo_state = EchoState.READY
 		return
@@ -230,10 +243,8 @@ func _activate_echo():
 	quantum_echo = QuantumEchoScene.instantiate()
 	get_parent().add_child(quantum_echo)
 	
-	# Set up echo with recorded data
-	var echo_path = position_history.slice(1)  # Skip starting position
-	var echo_timings = timing_history.slice(0, timing_history.size())  # All recorded timings
-	quantum_echo.setup(position_history[0], echo_path, echo_timings, self, maze, $Sprite2D)
+	# Set up echo with recorded data.
+	quantum_echo.setup(position_history, timing_history, self, maze, $Sprite2D)
 	
 	echo_active = true
 	echo_state = EchoState.PLAYING
@@ -314,8 +325,11 @@ func _can_move_to_world_position(world_pos: Vector2) -> bool:
 
 # Debug/utility
 func reset_to_start():
+	print("Player resetting to start position.")
+	# Deactivate any active plates from the previous level
 	for pos in player_plates:
-		maze.deactivate_pressure_plate(pos)
+		if is_instance_valid(maze):
+			maze.deactivate_pressure_plate(pos)
 	player_plates.clear()
 	
 	_deactivate_echo()
@@ -326,7 +340,8 @@ func reset_to_start():
 	position_history.clear()
 	timing_history.clear()
 	current_position_start_time = Time.get_unix_time_from_system()
-	_check_plate_interaction()
+	if is_instance_valid(maze):
+		_check_plate_interaction()
 
 # Status functions for UI/debugging
 func get_recording_status() -> String:
