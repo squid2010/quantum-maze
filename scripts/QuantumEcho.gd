@@ -22,7 +22,7 @@ var player_ref: Player
 var loader_ref: LevelLoader
 @onready var playback_sound: AudioStreamPlayer = $PlaybackSound
 
-func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Player, loader: LevelLoader, original_sprite: Sprite2D):
+func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Player, loader: LevelLoader, original_sprite: AnimatedSprite2D):
 	if echo_path.is_empty():
 		_finish_echo()
 		return
@@ -32,7 +32,8 @@ func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Playe
 	player_ref = player
 	loader_ref = loader
 	
-	texture = original_sprite.texture
+	# Use the first frame of the current animation for the echo's texture
+	texture = original_sprite.sprite_frames.get_frame_texture(original_sprite.animation, 0)
 	scale = original_sprite.get_parent().scale
 	modulate = Color(0.7, 1.0, 1.0, 0.6)
 	

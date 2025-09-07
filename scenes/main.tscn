@@ -26,10 +26,6 @@ position = Vector2(0, 120)
 [node name="LevelLoader" parent="World" instance=ExtResource("1_newloader")]
 
 [node name="Player" parent="World" instance=ExtResource("2_sugp2")]
-move_speed = null
-cell_size = null
-max_recording_time = null
-grid_snap_threshold = null
 
 [node name="UI" parent="." instance=ExtResource("3_uiabc")]
 

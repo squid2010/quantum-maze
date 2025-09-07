@@ -12,6 +12,7 @@ var grid_pos: Vector2i = Vector2i(1, 1)
 var is_moving: bool = false
 var input_buffer: Vector2 = Vector2.ZERO
 var last_grid_pos: Vector2i = Vector2i(1, 1)
+var facing_direction: Vector2 = Vector2.DOWN
 
 var position_history: Array[Vector2i] = []
 var timing_history: Array[float] = []
@@ -31,12 +32,12 @@ var echo_plates: Array[Vector2i] = []
 
 var ui: CanvasLayer
 @onready var echo_sound: AudioStreamPlayer = $EchoSound
-@onready var sprite: Sprite2D = $Sprite2D
+@onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 
 func _ready():
 	collision_layer = 2
 	collision_mask = 1
-	sprite.z_index = 2 # Set a higher Z-index for the player's sprite
+	animated_sprite.z_index = 2 # Set a higher Z-index for the player's sprite
 	
 	remaining_recording_time = max_recording_time
 	
@@ -48,6 +49,7 @@ func _ready():
 	_set_grid_position(Vector2i(1, 1))
 	current_position_start_time = Time.get_unix_time_from_system()
 	_check_plate_interaction()
+	_update_animation()
 
 func _physics_process(delta):
 	_handle_input()
@@ -55,6 +57,7 @@ func _physics_process(delta):
 	_update_grid_position()
 	_update_recording_time(delta)
 	_check_for_tutorial_triggers()
+	_update_animation()
 
 func is_tutorial_level() -> bool:
 	if is_instance_valid(level_loader) and level_loader.get_current_level_index() < level_loader.level_files.size():
@@ -83,10 +86,32 @@ func _handle_input():
 	if Input.is_action_pressed("move_left"): input_dir.x -= 1
 	if Input.is_action_pressed("move_right"): input_dir.x += 1
 	
-	if input_dir.length() > 0 and is_tutorial_level():
-		ui.show_tutorial("MOVE")
+	if input_dir.length() > 0:
+		if is_tutorial_level():
+			ui.show_tutorial("MOVE")
+		facing_direction = input_dir.normalized()
 	
 	input_buffer = input_dir.normalized()
+
+func _update_animation():
+	var anim_name = "idle"
+	if is_moving:
+		anim_name = "walk"
+	
+	var direction_name = "down"
+	if facing_direction.y < 0:
+		direction_name = "up"
+	elif facing_direction.y > 0:
+		direction_name = "down"
+	elif facing_direction.x < 0:
+		direction_name = "left"
+	elif facing_direction.x > 0:
+		direction_name = "right"
+		
+	var new_animation = anim_name + "_" + direction_name
+	
+	if animated_sprite.animation != new_animation:
+		animated_sprite.play(new_animation)
 
 func _check_for_tutorial_triggers():
 	if not is_instance_valid(ui): return
@@ -240,7 +265,7 @@ func _activate_echo():
 	_play_echo_sound()
 	quantum_echo = QuantumEchoScene.instantiate()
 	get_parent().add_child(quantum_echo)
-	quantum_echo.setup(position_history, timing_history, self, level_loader, $Sprite2D)
+	quantum_echo.setup(position_history, timing_history, self, level_loader, animated_sprite)
 	echo_active = true
 	echo_state = EchoState.PLAYING
 	print("Quantum Echo activated! Press quantum echo again to cancel")
@@ -320,6 +345,7 @@ func reset_to_start(player_start_pos: Vector2i):
 	timing_history.clear()
 	current_position_start_time = Time.get_unix_time_from_system()
 	_check_plate_interaction()
+	_update_animation()
 	
 	if is_instance_valid(ui):
 		ui.on_level_generated(player_start_pos)
