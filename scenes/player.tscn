@@ -4,10 +4,9 @@
 [ext_resource type="Script" uid="uid://kxlq726fw62w" path="res://scripts/player.gd" id="1_g2els"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_g2els"]
-size = Vector2(126, 126)
+size = Vector2(30, 30)
 
 [node name="Player" type="CharacterBody2D"]
-scale = Vector2(0.25, 0.25)
 collision_layer = 2
 script = ExtResource("1_g2els")
 

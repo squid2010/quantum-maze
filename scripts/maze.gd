@@ -17,26 +17,29 @@ var current_level_index: int = 0
 # -------------------------
 
 @export var cell_size: int = 32
-@export var num_temporal_puzzles: int = 1
+@export var num_temporal_puzzles: int = 1 
 @export var add_side_puzzles: bool = true
 
 # Colors
 @export var wall_color: Color = Color.BLACK
 @export var path_color: Color = Color.WHITE
 @export var switch_color: Color = Color.YELLOW
+@export var reset_switch_color: Color = Color.CYAN # New color for reset switches
 @export var door_color: Color = Color.RED
+@export var multi_switch_door_color: Color = Color.ORANGE
 @export var plate_color: Color = Color.BLUE
 @export var gate_color: Color = Color.PURPLE
 
 # Core data
 var grid: Array[Array] = []
 var switches: Dictionary = {}
+var reset_switches: Array[Vector2i] = [] # New data for reset switches
 var doors: Dictionary = {}
 var plates: Dictionary = {}
 var gates: Dictionary = {}
 
 # Puzzle connections
-var switch_doors: Dictionary = {}
+var door_switches: Dictionary = {}
 var plate_gates: Dictionary = {}
 
 # Collision bodies
@@ -63,14 +66,16 @@ func _ready():
 func next_level():
 	print("Level complete! Generating next level...")
 	current_level_index = (current_level_index + 1) % maze_sizes.size()
-	# Increase puzzles for larger mazes
-	if current_level_index > 1:
-		num_temporal_puzzles = 2
-	else:
-		num_temporal_puzzles = 1
 	generate()
 
 func generate():
+	# Randomize obstacles based on level size
+	if current_level_index < 2:
+		num_temporal_puzzles = randi_range(1, 2)
+	else:
+		num_temporal_puzzles = randi_range(2, 4)
+	print("Generating level %d with %d temporal puzzles." % [current_level_index + 1, num_temporal_puzzles])
+
 	_clear_level_objects()
 	_init_grid()
 	_generate_maze()
@@ -104,7 +109,6 @@ func get_current_level_index() -> int:
 	return current_level_index
 
 func _clear_level_objects():
-	# Remove old collision bodies
 	for body in wall_bodies:
 		if is_instance_valid(body): body.queue_free()
 	wall_bodies.clear()
@@ -115,7 +119,6 @@ func _clear_level_objects():
 		if is_instance_valid(gate_bodies[pos]): gate_bodies[pos].queue_free()
 	gate_bodies.clear()
 	
-	# Remove old goal
 	if is_instance_valid(goal_instance):
 		goal_instance.queue_free()
 		goal_instance = null
@@ -124,10 +127,11 @@ func _init_grid():
 	var current_maze_size = get_maze_size()
 	grid.clear()
 	switches.clear()
+	reset_switches.clear()
 	doors.clear()
 	plates.clear()
 	gates.clear()
-	switch_doors.clear()
+	door_switches.clear()
 	plate_gates.clear()
 	for y in current_maze_size.y:
 		grid.append([])
@@ -201,7 +205,8 @@ func _add_temporal_puzzles() -> int:
 
 		_add_plate_gate_pair(plate_pos, gate_pos)
 		
-		var path_after_gate = _find_astar_path(gate_pos, end_pos, [gate_pos])
+		# Now, the A* check for solvability considers the gate as an openable obstacle
+		var path_after_gate = _find_astar_path(gate_pos, end_pos)
 		if path_after_gate.is_empty():
 			print("Puzzle #%d is unsolvable. Removing it and stopping." % (i + 1))
 			plates.erase(plate_pos)
@@ -220,28 +225,48 @@ func _add_side_puzzles():
 	var path_cells = _get_path_cells()
 	path_cells.shuffle()
 	
-	var puzzles_to_add = min(dead_ends.size(), 2)
+	var puzzles_to_add = min(dead_ends.size(), randi_range(2, 5))
 	var used_cells: Array[Vector2i] = []
 
 	for i in range(puzzles_to_add):
 		if dead_ends.is_empty() or path_cells.is_empty():
 			break
 			
-		var door_pos = dead_ends.pop_front()
+		var puzzle_pos = dead_ends.pop_front()
+		used_cells.append(puzzle_pos)
+
+		# Decide what kind of puzzle to create
+		var puzzle_type = randi_range(0, 10)
 		
-		var switch_pos = Vector2i.ZERO
-		var found_switch_pos = false
-		for cell in path_cells:
-			if not used_cells.has(cell) and cell.distance_to(door_pos) > 3:
-				switch_pos = cell
-				found_switch_pos = true
-				break
-		
-		if found_switch_pos:
-			_add_switch_door_pair(switch_pos, door_pos)
-			used_cells.append(door_pos)
-			used_cells.append(switch_pos)
-			print("Added side puzzle. Switch: %s, Door: %s" % [switch_pos, door_pos])
+		if puzzle_type > 8 and current_level_index > 0: # 20% chance for a Reset Switch
+			reset_switches.append(puzzle_pos)
+			print("Added Reset Switch at %s" % puzzle_pos)
+		else: # 80% chance for a Door puzzle
+			var num_switches = 1
+			if current_level_index >= 2 and randf() < 0.6: num_switches = 2
+			elif current_level_index >= 1 and randf() < 0.4: num_switches = 2
+
+			var switch_positions: Array[Vector2i] = []
+			var found_all_switches = true
+			for j in range(num_switches):
+				var found_switch_pos = false
+				var best_pos = Vector2i.ZERO
+				for cell in path_cells:
+					if not used_cells.has(cell) and cell.distance_to(puzzle_pos) > 4:
+						best_pos = cell
+						found_switch_pos = true
+						break
+				if found_switch_pos:
+					switch_positions.append(best_pos)
+					used_cells.append(best_pos)
+					path_cells.erase(best_pos)
+				else:
+					found_all_switches = false
+					break
+			
+			if found_all_switches:
+				_add_door_and_switches(puzzle_pos, switch_positions)
+				print("Added %d-switch puzzle. Door: %s, Switches: %s" % [num_switches, puzzle_pos, switch_positions])
 
 func _find_dead_ends() -> Array[Vector2i]:
 	var dead_ends: Array[Vector2i] = []
@@ -266,10 +291,11 @@ func _get_path_cells() -> Array[Vector2i]:
 			if not grid[y][x]: paths.append(Vector2i(x, y))
 	return paths
 
-func _add_switch_door_pair(switch_pos: Vector2i, door_pos: Vector2i):
-	switches[switch_pos] = false
+func _add_door_and_switches(door_pos: Vector2i, switch_positions: Array[Vector2i]):
 	doors[door_pos] = false
-	switch_doors[switch_pos] = door_pos
+	door_switches[door_pos] = switch_positions
+	for switch_pos in switch_positions:
+		switches[switch_pos] = false
 
 func _add_plate_gate_pair(plate_pos: Vector2i, gate_pos: Vector2i):
 	plates[plate_pos] = false
@@ -322,9 +348,16 @@ func _create_gate_collision(pos: Vector2i):
 	add_child(body)
 	gate_bodies[pos] = body
 
-func is_path_at(pos: Vector2i, ignore_obstacles: bool = false) -> bool:
+func is_path_at(pos: Vector2i, for_astar: bool = false) -> bool:
 	if is_wall_at(pos): return false
-	if ignore_obstacles: return true
+	
+	# For A*, assume we can solve puzzles
+	if for_astar:
+		# A* assumes we can always find a way to open a door or gate
+		if doors.has(pos) or gates.has(pos):
+			return true
+	
+	# For player/echo collision, check current state
 	if doors.has(pos) and not doors[pos]: return false
 	if gates.has(pos) and not gates[pos]: return false
 	return true
@@ -336,10 +369,16 @@ func is_wall_at(pos: Vector2i) -> bool:
 	return grid[pos.y][pos.x]
 
 func toggle_switch(pos: Vector2i):
-	if switches.has(pos):
+	if reset_switches.has(pos):
+		# Deactivate all other switches
+		for switch_pos in switches:
+			switches[switch_pos] = false
+		print("Reset switch activated!")
+	elif switches.has(pos):
 		switches[pos] = not switches[pos]
-		_update_doors()
-		queue_redraw()
+	
+	_update_doors()
+	queue_redraw()
 
 func activate_pressure_plate(pos: Vector2i):
 	if plates.has(pos):
@@ -354,12 +393,17 @@ func deactivate_pressure_plate(pos: Vector2i):
 		queue_redraw()
 
 func _update_doors():
-	for switch_pos in switch_doors:
-		var door_pos = switch_doors[switch_pos]
-		var door_open = switches[switch_pos]
-		doors[door_pos] = door_open
+	for door_pos in door_switches:
+		var required_switches = door_switches[door_pos]
+		var all_switches_on = true
+		for switch_pos in required_switches:
+			if not switches.get(switch_pos, false):
+				all_switches_on = false
+				break
+		
+		doors[door_pos] = all_switches_on
 		if is_instance_valid(door_bodies[door_pos]):
-			door_bodies[door_pos].get_child(0).disabled = door_open
+			door_bodies[door_pos].get_child(0).disabled = all_switches_on
 
 func _update_gates():
 	for plate_pos in plate_gates:
@@ -369,7 +413,9 @@ func _update_gates():
 		if is_instance_valid(gate_bodies[gate_pos]):
 			gate_bodies[gate_pos].get_child(0).disabled = gate_open
 
-func has_switch_at(pos: Vector2i) -> bool: return switches.has(pos)
+func has_switch_at(pos: Vector2i) -> bool:
+	return switches.has(pos) or reset_switches.has(pos)
+
 func has_pressure_plate_at(pos: Vector2i) -> bool: return plates.has(pos)
 
 func _draw():
@@ -384,15 +430,23 @@ func _draw():
 	_draw_gates()
 
 func _draw_switches():
+	# Regular switches
 	for pos in switches:
 		var rect = Rect2(pos.x * cell_size + 8, pos.y * cell_size + 8, 16, 16)
 		draw_rect(rect, Color.GREEN if switches[pos] else switch_color)
+	# Reset switches
+	for pos in reset_switches:
+		var rect = Rect2(pos.x * cell_size + 8, pos.y * cell_size + 8, 16, 16)
+		draw_rect(rect, reset_switch_color) # Always the same color
 
 func _draw_doors():
 	for pos in doors:
 		if not doors[pos]:
 			var rect = Rect2(pos.x * cell_size, pos.y * cell_size, cell_size, cell_size)
-			draw_rect(rect, door_color)
+			var door_color_to_use = door_color
+			if door_switches.has(pos) and door_switches[pos].size() > 1:
+				door_color_to_use = multi_switch_door_color
+			draw_rect(rect, door_color_to_use)
 
 func _draw_pressure_plates():
 	for pos in plates:
@@ -405,7 +459,7 @@ func _draw_gates():
 			var rect = Rect2(pos.x * cell_size, pos.y * cell_size, cell_size, cell_size)
 			draw_rect(rect, gate_color)
 
-func _find_astar_path(start_pos: Vector2i, end_pos: Vector2i, passable_obstacles: Array = []) -> Array:
+func _find_astar_path(start_pos: Vector2i, end_pos: Vector2i) -> Array:
 	var open_set: Array[AStarPoint] = []
 	var all_points: Dictionary = {}
 	var start_point = AStarPoint.new(start_pos)
@@ -422,7 +476,7 @@ func _find_astar_path(start_pos: Vector2i, end_pos: Vector2i, passable_obstacles
 		
 		all_points.erase(current_point.pos)
 
-		for neighbor_pos in _get_astar_neighbors(current_point.pos, passable_obstacles):
+		for neighbor_pos in _get_astar_neighbors(current_point.pos):
 			if not all_points.has(neighbor_pos) or all_points[neighbor_pos].f_score == INF:
 				var neighbor_point = all_points.get(neighbor_pos, AStarPoint.new(neighbor_pos))
 				if not all_points.has(neighbor_pos): all_points[neighbor_pos] = neighbor_point
@@ -438,11 +492,12 @@ func _find_astar_path(start_pos: Vector2i, end_pos: Vector2i, passable_obstacles
 
 func _heuristic(a: Vector2i, b: Vector2i) -> float: return a.distance_to(b)
 
-func _get_astar_neighbors(pos: Vector2i, passable_obstacles: Array) -> Array:
+func _get_astar_neighbors(pos: Vector2i) -> Array:
 	var neighbors: Array[Vector2i] = []
 	for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 		var neighbor = pos + dir
-		if passable_obstacles.has(neighbor) or is_path_at(neighbor):
+		# Use the smarter path check for A*
+		if is_path_at(neighbor, true):
 			neighbors.append(neighbor)
 	return neighbors
 
