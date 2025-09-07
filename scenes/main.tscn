@@ -1,8 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://0g4wr2meuvjg"]
+[gd_scene load_steps=5 format=3 uid="uid://d1q2w3e4r5t6y"]
 
-[ext_resource type="PackedScene" uid="uid://de3d4r3wvf5ho" path="res://scenes/MazeGenerator.tscn" id="1_0wfyh"]
 [ext_resource type="Script" uid="uid://dg50gtka3u1f3" path="res://scripts/main.gd" id="1_524t3"]
-[ext_resource type="PackedScene" uid="uid://cnikgwgggeeu2" path="res://scenes/player.tscn" id="2_sugp2"]
+[ext_resource type="PackedScene" path="res://scenes/LevelLoader.tscn" id="1_newloader"]
+[ext_resource type="PackedScene" uid="uid://c3d4e5f6g7h8i" path="res://scenes/player.tscn" id="2_sugp2"]
 [ext_resource type="PackedScene" uid="uid://dduyd15hmjp6l" path="res://scenes/UI.tscn" id="3_uiabc"]
 
 [node name="main" type="Node2D"]
@@ -11,7 +11,7 @@ script = ExtResource("1_524t3")
 [node name="World" type="Node2D" parent="."]
 position = Vector2(0, 120)
 
-[node name="MazeGenerator" parent="World" instance=ExtResource("1_0wfyh")]
+[node name="LevelLoader" parent="World" instance=ExtResource("1_newloader")]
 
 [node name="Player" parent="World" instance=ExtResource("2_sugp2")]
 
