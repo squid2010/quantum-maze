@@ -1,0 +1,9 @@
+[gd_resource type="DynamicFont" load_steps=2 format=3 uid="uid://b8k2y7j3a1b2c"]
+
+[ext_resource type="FontFile" uid="uid://c4d5e6f7g8h9i" path="res://assets/ka1.ttf" id="1_font_data"]
+
+[resource]
+size = 24
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+font_data = ExtResource("1_font_data")

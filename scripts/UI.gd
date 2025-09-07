@@ -1,18 +1,21 @@
 extends CanvasLayer
 
-@onready var level_label: Label = $MarginContainer/VBoxContainer/LevelLabel
-@onready var status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
-@onready var time_bar: ProgressBar = $MarginContainer/VBoxContainer/TimeBar
+@onready var level_label: Label = $TopBar/MarginContainer/HBoxContainer/VBoxContainer/LevelLabel
+@onready var status_label: Label = $TopBar/MarginContainer/HBoxContainer/VBoxContainer/StatusLabel
+@onready var time_bar: ProgressBar = $TopBar/MarginContainer/HBoxContainer/VBoxContainer/TimeBar
 @onready var tutorial_panel: Panel = $TutorialPanel
 @onready var tutorial_label: RichTextLabel = $TutorialPanel/TutorialLabel
+@onready var pause_menu: Control = $PauseMenu
+@onready var button_sound: AudioStreamPlayer = $ButtonSound
+@onready var music_slider: HSlider = $PauseMenu/CenterContainer/VBoxContainer/MusicControl/MusicSlider
 
 @onready var player: Player = get_tree().root.get_node("main/World/Player")
 @onready var level_loader: LevelLoader = get_tree().root.get_node("main/World/LevelLoader")
 
 var tutorial_messages = {
-	"MOVE": "Use the [b]Arrow Keys[/b] to move your character.",
+	"MOVE": "Use the [b]Arrow Keys[/b] or [b]WASD[/b] to move.",
 	"GOAL": "The [color=lightgreen]Goal[/color] is your objective. Reach it to proceed to the next level.",
-	"SWITCH": "This is a [color=yellow]Switch[/color]. Interact with it using [b]Enter[/b] or [b]Spacebar[/b].",
+	"SWITCH": "This is a [color=yellow]Switch[/color]. Interact with it using [b]Enter[/b] or [b]Spacebar[/b] when nearby.",
 	"DOOR": "This is a [color=red]Door[/color]. It can be opened by a switch.",
 	"PLATE": "This is a [color=lightblue]Pressure Plate[/color]. It activates something while you or your echo stand on it.",
 	"GATE": "This is a [color=purple]Gate[/color]. It stays open only while its pressure plate is held down.",
@@ -24,23 +27,77 @@ var current_tutorial_key: String = ""
 
 func _ready():
 	tutorial_panel.hide()
+	pause_menu.hide()
+	
 	if is_instance_valid(level_loader):
 		level_loader.level_generated.connect(on_level_generated)
 
+	# Connect pause menu buttons
+	pause_menu.get_node("CenterContainer/VBoxContainer/Buttons/ResumeButton").pressed.connect(_on_ResumeButton_pressed)
+	pause_menu.get_node("CenterContainer/VBoxContainer/Buttons/RestartButton").pressed.connect(_on_RestartButton_pressed)
+	pause_menu.get_node("CenterContainer/VBoxContainer/Buttons/QuitButton").pressed.connect(_on_QuitButton_pressed)
+	
+	# Connect the new visible pause button
+	$TopBar/MarginContainer/HBoxContainer/PauseButton.pressed.connect(_on_PauseButton_pressed)
+
+	# --- Music Slider Setup ---
+	var music_bus_idx = AudioServer.get_bus_index("Music")
+	music_slider.value = AudioServer.get_bus_volume_db(music_bus_idx)
+	music_slider.value_changed.connect(_on_music_slider_value_changed)
+	# --------------------------
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"): # 'ui_cancel' is usually the Escape key
+		_toggle_pause()
+		get_tree().get_root().set_input_as_handled() # Prevent other nodes from processing this input
+
 func _process(delta: float) -> void:
 	if not is_instance_valid(player) or not is_instance_valid(level_loader):
+		return
+		
+	if get_tree().paused:
 		return
 
 	update_level_label()
 	update_status_label()
 	update_time_bar()
 
+func _play_button_sound():
+	if is_instance_valid(button_sound):
+		button_sound.play(0.05) # Start playback 0.05s in to feel more responsive
+
+func _toggle_pause():
+	get_tree().paused = not get_tree().paused
+	pause_menu.visible = get_tree().paused
+	if get_tree().paused:
+		_play_button_sound()
+
+func _on_PauseButton_pressed():
+	_toggle_pause()
+
+func _on_ResumeButton_pressed():
+	_play_button_sound()
+	_toggle_pause()
+
+func _on_RestartButton_pressed():
+	_play_button_sound()
+	if get_tree().paused:
+		_toggle_pause()
+	if is_instance_valid(level_loader):
+		level_loader.generate()
+
+func _on_QuitButton_pressed():
+	_play_button_sound()
+	get_tree().quit()
+
+func _on_music_slider_value_changed(value: float):
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Music"), value)
+
 func update_level_label() -> void:
 	var level_num = level_loader.get_current_level_index()
 	if level_loader.level_files[level_num].ends_with("tutorial.txt"):
 		level_label.text = "Tutorial"
 	else:
-		# MODIFIED: Show the correct level number for non-tutorial levels
 		var tutorial_count = 0
 		for file in level_loader.level_files:
 			if file.ends_with("tutorial.txt"):
@@ -56,6 +113,8 @@ func update_time_bar() -> void:
 	time_bar.value = player.remaining_recording_time
 
 func show_tutorial(key: String):
+	if get_tree().paused:
+		return
 	if key in shown_tutorials or not key in tutorial_messages:
 		return
 	
@@ -69,7 +128,6 @@ func hide_tutorial(key: String):
 		tutorial_panel.hide()
 		current_tutorial_key = ""
 
-# --- NEW FUNCTION ---
 func hide_all_tutorials():
 	if tutorial_panel.visible:
 		tutorial_panel.hide()

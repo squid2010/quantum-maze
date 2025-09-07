@@ -1,6 +1,45 @@
-[gd_scene load_steps=2 format=3 uid="uid://b7l0gq8vj3f8k"]
+[gd_scene load_steps=9 format=3 uid="uid://b7l0gq8vj3f8k"]
 
-[ext_resource type="Script" path="res://scripts/LevelLoader.gd" id="1_abcde"]
+[ext_resource type="Script" uid="uid://ddo4p08lw6krp" path="res://scripts/LevelLoader.gd" id="1_abcde"]
+[ext_resource type="AudioStream" uid="uid://dvk0n1kt2ekjf" path="res://assets/sound/pressure_plate_on.mp3" id="2_plate_on"]
+[ext_resource type="AudioStream" uid="uid://c18hadat4qoby" path="res://assets/sound/pressure_plate_off.mp3" id="3_plate_off"]
+[ext_resource type="AudioStream" uid="uid://bs3q7ageeuhfx" path="res://assets/sound/door_open.mp3" id="4_door_open"]
+[ext_resource type="AudioStream" uid="uid://ckwp642tt21dc" path="res://assets/sound/door_close.mp3" id="5_door_close"]
+[ext_resource type="AudioStream" uid="uid://c3kaauew8kpid" path="res://assets/sound/switch_on.mp3" id="6_switch_on"]
+[ext_resource type="AudioStream" uid="uid://bnh2bt4lt0sie" path="res://assets/sound/switch_off.mp3" id="7_switch_off"]
+[ext_resource type="AudioStream" uid="uid://2ujl1yexlfuq" path="res://assets/sound/level_completed.mp3" id="8_level_completed"]
 
 [node name="LevelLoader" type="Node2D"]
 script = ExtResource("1_abcde")
+
+[node name="PlateOnSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("2_plate_on")
+bus = &"SFX"
+
+[node name="PlateOffSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_plate_off")
+bus = &"SFX"
+
+[node name="DoorOpenSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("4_door_open")
+volume_db = -8.0
+pitch_scale = 1.4
+bus = &"SFX"
+
+[node name="DoorCloseSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("5_door_close")
+volume_db = -8.0
+pitch_scale = 1.4
+bus = &"SFX"
+
+[node name="SwitchOnSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("6_switch_on")
+bus = &"SFX"
+
+[node name="SwitchOffSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("7_switch_off")
+bus = &"SFX"
+
+[node name="LevelCompletedSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("8_level_completed")
+bus = &"SFX"

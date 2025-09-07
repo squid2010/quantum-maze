@@ -19,8 +19,8 @@ var timer: float = 0.0
 var current_duration: float = 0.0
 
 var player_ref: Player
-# --- UPDATED REFERENCE ---
 var loader_ref: LevelLoader
+@onready var playback_sound: AudioStreamPlayer = $PlaybackSound
 
 func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Player, loader: LevelLoader, original_sprite: Sprite2D):
 	if echo_path.is_empty():
@@ -41,6 +41,7 @@ func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Playe
 	last_grid_pos = grid_pos
 	position = _grid_to_world(grid_pos)
 	
+	playback_sound.play()
 	_start_pause()
 
 func _ready():
@@ -114,6 +115,8 @@ func _world_to_grid(world_pos: Vector2) -> Vector2i:
 
 func cleanup():
 	state = State.FINISHED
+	if is_instance_valid(playback_sound):
+		playback_sound.stop()
 	if is_instance_valid(loader_ref) and loader_ref.has_pressure_plate_at(grid_pos):
 		if is_instance_valid(player_ref): player_ref.echo_left_pressure_plate(grid_pos)
 	queue_free()

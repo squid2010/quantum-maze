@@ -1,54 +1,177 @@
-[gd_scene load_steps=2 format=3 uid="uid://dduyd15hmjp6l"]
+[gd_scene load_steps=5 format=3 uid="uid://dduyd15hmjp6l"]
 
 [ext_resource type="Script" uid="uid://5nxib5obomgt" path="res://scripts/UI.gd" id="1_uikjL"]
+[ext_resource type="FontFile" uid="uid://b8k2y7j3a1b2c" path="res://theme/ka1_font.tres" id="2_font"]
+[ext_resource type="AudioStream" uid="uid://dqlaplkolnkb0" path="res://assets/sound/button.mp3" id="3_sound"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_abcde"]
+bg_color = Color(0, 0, 0, 0.6)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [node name="UI" type="CanvasLayer"]
 script = ExtResource("1_uikjL")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="TopBar" type="ColorRect" parent="."]
 anchors_preset = 10
 anchor_right = 1.0
-offset_bottom = 100.0
+offset_bottom = 90.0
 grow_horizontal = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+color = Color(0.1, 0.1, 0.1, 0.8)
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
-layout_mode = 2
-
-[node name="LevelLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "Level: 1"
-autowrap_mode = 2
-
-[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "Ready to record (10.0s remaining)"
-autowrap_mode = 2
-
-[node name="TimeBar" type="ProgressBar" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-value = 100.0
-show_percentage = false
-
-[node name="TutorialPanel" type="Panel" parent="."]
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -100.0
-grow_horizontal = 2
-grow_vertical = 0
-
-[node name="TutorialLabel" type="RichTextLabel" parent="TutorialPanel"]
+[node name="MarginContainer" type="MarginContainer" parent="TopBar"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 5
+
+[node name="HBoxContainer" type="HBoxContainer" parent="TopBar/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="LevelLabel" type="Label" parent="TopBar/MarginContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 28
+text = "Level: 1"
+autowrap_mode = 2
+
+[node name="StatusLabel" type="Label" parent="TopBar/MarginContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+text = "Ready to record (10.0s remaining)"
+autowrap_mode = 2
+
+[node name="TimeBar" type="ProgressBar" parent="TopBar/MarginContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+value = 100.0
+show_percentage = false
+
+[node name="PauseButton" type="Button" parent="TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_fonts/font = ExtResource("2_font")
+text = "II"
+
+[node name="TutorialPanel" type="Panel" parent="."]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -90.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_abcde")
+
+[node name="TutorialLabel" type="RichTextLabel" parent="TutorialPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 15.0
+offset_top = 15.0
+offset_right = -15.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/normal_font = ExtResource("2_font")
 bbcode_enabled = true
 text = "Tutorial text will appear here."
 fit_content = true
+
+[node name="PauseMenu" type="Control" parent="."]
+process_mode = 3
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.7)
+
+[node name="CenterContainer" type="CenterContainer" parent="PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PauseMenu/CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="PauseLabel" type="Label" parent="PauseMenu/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 64
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="Buttons" type="VBoxContainer" parent="PauseMenu/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="ResumeButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer/Buttons"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 32
+text = "Resume"
+
+[node name="RestartButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer/Buttons"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 32
+text = "Restart Level"
+
+[node name="QuitButton" type="Button" parent="PauseMenu/CenterContainer/VBoxContainer/Buttons"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 32
+text = "Quit Game"
+
+[node name="MusicControl" type="VBoxContainer" parent="PauseMenu/CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MusicLabel" type="Label" parent="PauseMenu/CenterContainer/VBoxContainer/MusicControl"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 24
+text = "Music Volume"
+horizontal_alignment = 1
+
+[node name="MusicSlider" type="HSlider" parent="PauseMenu/CenterContainer/VBoxContainer/MusicControl"]
+layout_mode = 2
+min_value = -40.0
+max_value = 0.0
+step = 2.0
+
+[node name="ButtonSound" type="AudioStreamPlayer" parent="."]
+process_mode = 3
+stream = ExtResource("3_sound")
+bus = &"SFX"

@@ -30,10 +30,13 @@ var player_plates: Array[Vector2i] = []
 var echo_plates: Array[Vector2i] = []
 
 var ui: CanvasLayer
+@onready var echo_sound: AudioStreamPlayer = $EchoSound
+@onready var sprite: Sprite2D = $Sprite2D
 
 func _ready():
 	collision_layer = 2
 	collision_mask = 1
+	sprite.z_index = 2 # Set a higher Z-index for the player's sprite
 	
 	remaining_recording_time = max_recording_time
 	
@@ -68,7 +71,6 @@ func _update_recording_time(delta):
 func _handle_input():
 	if Input.is_action_just_pressed("quantum_echo"):
 		_handle_quantum_echo_button()
-		# REMOVED: Tutorial trigger is no longer here.
 		return
 	
 	if Input.is_action_just_pressed("ui_accept"):
@@ -122,6 +124,10 @@ func _check_for_tutorial_triggers():
 	for key in keys_to_hide:
 		if not key in nearby_objects:
 			ui.hide_tutorial(key)
+
+func _play_echo_sound():
+	if is_instance_valid(echo_sound):
+		echo_sound.play()
 
 func _handle_quantum_echo_button():
 	match echo_state:
@@ -183,6 +189,7 @@ func _interact():
 			return
 
 func _start_recording():
+	_play_echo_sound()
 	is_recording = true
 	echo_state = EchoState.RECORDING
 	recording_start_time = Time.get_unix_time_from_system()
@@ -194,6 +201,7 @@ func _start_recording():
 
 func _stop_recording():
 	if not is_recording: return
+	_play_echo_sound()
 	is_recording = false
 	var current_time = Time.get_unix_time_from_system()
 	var time_spent_in_last_cell = current_time - current_position_start_time
@@ -211,6 +219,7 @@ func _stop_recording():
 
 func _force_stop_recording():
 	if not is_recording: return
+	_play_echo_sound()
 	is_recording = false
 	var current_time = Time.get_unix_time_from_system()
 	var time_spent_in_last_cell = current_time - current_position_start_time
@@ -228,6 +237,7 @@ func _activate_echo():
 		echo_state = EchoState.READY
 		return
 	
+	_play_echo_sound()
 	quantum_echo = QuantumEchoScene.instantiate()
 	get_parent().add_child(quantum_echo)
 	quantum_echo.setup(position_history, timing_history, self, level_loader, $Sprite2D)
@@ -236,6 +246,7 @@ func _activate_echo():
 	print("Quantum Echo activated! Press quantum echo again to cancel")
 
 func _deactivate_echo():
+	_play_echo_sound()
 	if quantum_echo:
 		quantum_echo.cleanup()
 		quantum_echo = null
@@ -267,7 +278,6 @@ func _enter_pressure_plate(pos: Vector2i, is_player: bool):
 		plates_array.append(pos)
 		level_loader.activate_pressure_plate(pos)
 
-		# ADDED: Show echo tutorial when player steps on a plate for the first time
 		if is_player and is_tutorial_level():
 			ui.show_tutorial("ECHO")
 
@@ -301,7 +311,7 @@ func reset_to_start(player_start_pos: Vector2i):
 			level_loader.deactivate_pressure_plate(pos)
 	player_plates.clear()
 	
-	_deactivate_echo()
+	if echo_active: _deactivate_echo()
 	is_recording = false
 	echo_state = EchoState.READY
 	remaining_recording_time = max_recording_time

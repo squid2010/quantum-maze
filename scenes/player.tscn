@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://c3d4e5f6g7h8i"]
+[gd_scene load_steps=5 format=3 uid="uid://c3d4e5f6g7h8i"]
 
 [ext_resource type="Texture2D" uid="uid://deid4svpkol0o" path="res://icon.svg" id="1_3vyb7"]
 [ext_resource type="Script" uid="uid://kxlq726fw62w" path="res://scripts/player.gd" id="1_g2els"]
+[ext_resource type="AudioStream" uid="uid://b33e4xrq5bw5l" path="res://assets/sound/echo.mp3" id="3_sound"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_g2els"]
 size = Vector2(30, 30)
@@ -18,3 +19,7 @@ position = Vector2(0, 0.5)
 shape = SubResource("RectangleShape2D_g2els")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="EchoSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_sound")
+bus = &"SFX"
