@@ -32,24 +32,20 @@ func _ready():
 	if is_instance_valid(level_loader):
 		level_loader.level_generated.connect(on_level_generated)
 
-	# Connect pause menu buttons
 	pause_menu.get_node("CenterContainer/VBoxContainer/Buttons/ResumeButton").pressed.connect(_on_ResumeButton_pressed)
 	pause_menu.get_node("CenterContainer/VBoxContainer/Buttons/RestartButton").pressed.connect(_on_RestartButton_pressed)
 	pause_menu.get_node("CenterContainer/VBoxContainer/Buttons/QuitButton").pressed.connect(_on_QuitButton_pressed)
 	
-	# Connect the new visible pause button
 	$TopBar/MarginContainer/HBoxContainer/PauseButton.pressed.connect(_on_PauseButton_pressed)
 
-	# --- Music Slider Setup ---
 	var music_bus_idx = AudioServer.get_bus_index("Music")
 	music_slider.value = AudioServer.get_bus_volume_db(music_bus_idx)
 	music_slider.value_changed.connect(_on_music_slider_value_changed)
-	# --------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"): # 'ui_cancel' is usually the Escape key
+	if event.is_action_pressed("ui_cancel"):
 		_toggle_pause()
-		get_tree().get_root().set_input_as_handled() # Prevent other nodes from processing this input
+		get_tree().get_root().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(player) or not is_instance_valid(level_loader):
@@ -62,9 +58,21 @@ func _process(delta: float) -> void:
 	update_status_label()
 	update_time_bar()
 
+# NEW: Connects to the player's 'echo_created' signal.
+func on_echo_created(echo_instance: QuantumEcho):
+	if is_instance_valid(echo_instance):
+		echo_instance.time_consumed.connect(on_echo_time_consumed)
+
+# NEW: Called every frame by an active echo to drain the time bar smoothly.
+func on_echo_time_consumed(amount: float):
+	if is_instance_valid(player):
+		player.remaining_recording_time -= amount
+		# Ensure time doesn't go below zero
+		player.remaining_recording_time = max(0.0, player.remaining_recording_time)
+
 func _play_button_sound():
 	if is_instance_valid(button_sound):
-		button_sound.play(0.05) # Start playback 0.05s in to feel more responsive
+		button_sound.play(0.05)
 
 func _toggle_pause():
 	get_tree().paused = not get_tree().paused

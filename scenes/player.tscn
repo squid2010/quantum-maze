@@ -271,10 +271,11 @@ animations = [{
 "speed": 7.5
 }]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_g2els"]
-size = Vector2(30, 30)
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_qhqgy"]
+radius = 11.0
 
 [node name="Player" type="CharacterBody2D"]
+texture_filter = 1
 collision_layer = 2
 script = ExtResource("1_g2els")
 
@@ -283,8 +284,8 @@ sprite_frames = SubResource("SpriteFrames_animations")
 animation = &"walk_down"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, 0.5)
-shape = SubResource("RectangleShape2D_g2els")
+position = Vector2(-2, -1)
+shape = SubResource("CapsuleShape2D_qhqgy")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 

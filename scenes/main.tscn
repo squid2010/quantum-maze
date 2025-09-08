@@ -24,6 +24,7 @@ color = Color(0, 0, 0, 1)
 position = Vector2(0, 120)
 
 [node name="LevelLoader" parent="World" instance=ExtResource("1_newloader")]
+texture_filter = 1
 
 [node name="Player" parent="World" instance=ExtResource("2_sugp2")]
 
@@ -34,3 +35,4 @@ process_mode = 3
 stream = ExtResource("4_sound")
 autoplay = true
 bus = &"Music"
+parameters/looping = true

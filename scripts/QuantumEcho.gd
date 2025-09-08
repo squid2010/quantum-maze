@@ -3,6 +3,8 @@ class_name QuantumEcho
 
 @export var cell_size: int = 32
 
+signal time_consumed(amount: float)
+
 enum State { PAUSED, MOVING, FINISHED }
 var state: State = State.PAUSED
 
@@ -33,7 +35,6 @@ func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Playe
 	player_ref = player
 	loader_ref = loader
 	
-	# Copy animations and appearance from the player's sprite
 	self.sprite_frames = original_sprite.sprite_frames
 	scale = original_sprite.get_parent().scale
 	modulate = Color(0.7, 1.0, 1.0, 0.6)
@@ -50,9 +51,17 @@ func _ready():
 	if is_instance_valid(loader_ref) and loader_ref.has_pressure_plate_at(grid_pos):
 		player_ref.echo_entered_pressure_plate(grid_pos)
 
+# MODIFIED: Now checks player's remaining time.
 func _process(delta):
 	if state == State.FINISHED: return
+	
+	# NEW: Immediately stop if the player has run out of time.
+	if is_instance_valid(player_ref) and player_ref.remaining_recording_time <= 0:
+		_finish_echo()
+		return
+		
 	timer += delta
+	emit_signal("time_consumed", delta)
 	
 	if state == State.PAUSED:
 		if timer >= current_duration:
@@ -73,6 +82,10 @@ func _process(delta):
 			last_grid_pos = grid_pos
 			_handle_position_change(_world_to_grid(start_world_pos), grid_pos)
 			_start_pause()
+	
+	if state == State.PAUSED and current_path_index >= path.size() - 1 and timer >= current_duration:
+		_finish_echo()
+
 
 func _update_animation():
 	var animation_name = "idle"
@@ -101,14 +114,12 @@ func _start_pause():
 		current_duration = timings[current_path_index]
 	else:
 		current_duration = 0.1
-		var final_timer = get_tree().create_timer(current_duration)
-		await final_timer.timeout
-		if state != State.FINISHED: _finish_echo()
 
 func _start_move():
 	current_path_index += 1
 	if current_path_index >= path.size():
-		_finish_echo()
+		state = State.PAUSED
+		_update_animation()
 		return
 		
 	timer = 0.0
@@ -133,7 +144,9 @@ func _handle_position_change(old_pos: Vector2i, new_pos: Vector2i):
 func _finish_echo():
 	if state == State.FINISHED: return
 	state = State.FINISHED
-	if is_instance_valid(player_ref): player_ref._on_echo_finished()
+	if is_instance_valid(player_ref):
+		player_ref._on_echo_finished(self)
+	cleanup()
 
 func _grid_to_world(grid_pos: Vector2i) -> Vector2:
 	return Vector2(grid_pos.x * cell_size + cell_size / 2, grid_pos.y * cell_size + cell_size / 2)
@@ -141,9 +154,14 @@ func _world_to_grid(world_pos: Vector2) -> Vector2i:
 	return Vector2i(int(world_pos.x / cell_size), int(world_pos.y / cell_size))
 
 func cleanup():
+	if is_queued_for_deletion(): return
 	state = State.FINISHED
+	
 	if is_instance_valid(playback_sound):
 		playback_sound.stop()
+	
 	if is_instance_valid(loader_ref) and loader_ref.has_pressure_plate_at(grid_pos):
-		if is_instance_valid(player_ref): player_ref.echo_left_pressure_plate(grid_pos)
+		if is_instance_valid(player_ref):
+			player_ref.echo_left_pressure_plate(grid_pos)
+			
 	queue_free()

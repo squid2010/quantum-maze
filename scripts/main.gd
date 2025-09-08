@@ -15,7 +15,6 @@ func _on_level_generated(_player_start_pos):
 	
 	var camera = player.get_node_or_null("Camera2D")
 	if not camera:
-		print("ERROR: Camera2D not found on Player node.")
 		return
 		
 	# Get the total size of the maze in pixels
@@ -40,4 +39,3 @@ func _on_level_generated(_player_start_pos):
 	new_zoom = max(new_zoom, 0.75) # Allow slight zoom-out for better feel
 	
 	camera.zoom = Vector2(new_zoom, new_zoom)
-	print("Adjusting camera zoom to: ", new_zoom)

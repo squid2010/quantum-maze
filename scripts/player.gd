@@ -14,16 +14,21 @@ var input_dir: Vector2 = Vector2.ZERO
 var last_grid_pos: Vector2i = Vector2i(1, 1)
 var last_move_dir: Vector2 = Vector2.DOWN
 
+# --- Recording Data ---
 var position_history: Array[Vector2i] = []
 var timing_history: Array[float] = []
+var recording_duration: float = 0.0
 var current_position_start_time: float = 0.0
+# ----------------------
+
+# --- Echo Playback State ---
 var remaining_recording_time: float = 0.0
 var recording_start_time: float = 0.0
 var is_recording: bool = false
-var echo_active: bool = false
-var quantum_echo: QuantumEcho = null
+var active_echos: Array[QuantumEcho] = []
+# -------------------------
 
-enum EchoState { READY, RECORDING, PLAYBACK_READY, PLAYING }
+enum EchoState { READY, RECORDING }
 var echo_state: EchoState = EchoState.READY
 
 var level_loader: LevelLoader
@@ -34,10 +39,12 @@ var ui: CanvasLayer
 @onready var echo_sound: AudioStreamPlayer = $EchoSound
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 
+signal echo_created(echo_instance: QuantumEcho)
+
 func _ready():
 	collision_layer = 2
 	collision_mask = 1
-	animated_sprite.z_index = 2 # Set a higher Z-index for the player's sprite
+	animated_sprite.z_index = 2
 	
 	remaining_recording_time = max_recording_time
 	
@@ -45,6 +52,7 @@ func _ready():
 	level_loader.level_generated.connect(reset_to_start)
 	
 	ui = get_tree().root.get_node("main/UI")
+	self.echo_created.connect(ui.on_echo_created)
 	
 	_set_grid_position(Vector2i(1, 1))
 	current_position_start_time = Time.get_unix_time_from_system()
@@ -83,14 +91,17 @@ func is_tutorial_level() -> bool:
 
 func _update_recording_time(delta):
 	if is_recording:
-		remaining_recording_time -= delta
-		if remaining_recording_time <= 0:
-			remaining_recording_time = 0
+		var current_duration = Time.get_unix_time_from_system() - recording_start_time
+		if current_duration >= max_recording_time:
 			_force_stop_recording()
 
 func _handle_input():
-	if Input.is_action_just_pressed("quantum_echo"):
-		_handle_quantum_echo_button()
+	if Input.is_action_just_pressed("record_echo"): # R key
+		_handle_record_button()
+		return
+
+	if Input.is_action_just_pressed("play_echo"): # Q key
+		_activate_echo()
 		return
 	
 	if Input.is_action_just_pressed("ui_accept"):
@@ -145,14 +156,11 @@ func _play_echo_sound():
 	if is_instance_valid(echo_sound):
 		echo_sound.play()
 
-func _handle_quantum_echo_button():
-	match echo_state:
-		EchoState.READY:
-			if remaining_recording_time > 0: _start_recording()
-			else: print("No recording time remaining!")
-		EchoState.RECORDING: _stop_recording()
-		EchoState.PLAYBACK_READY: _activate_echo()
-		EchoState.PLAYING: _deactivate_echo()
+func _handle_record_button():
+	if echo_state == EchoState.RECORDING:
+		_stop_recording()
+	else:
+		_start_recording()
 
 func _handle_movement(delta):
 	if input_dir.length() > 0:
@@ -173,7 +181,7 @@ func _update_grid_position():
 	if new_grid_pos != last_grid_pos:
 		_handle_position_change(last_grid_pos, new_grid_pos)
 		
-		if is_recording and not echo_active:
+		if is_recording:
 			var current_time = Time.get_unix_time_from_system()
 			var time_spent = current_time - current_position_start_time
 			_record_timing(time_spent)
@@ -211,71 +219,67 @@ func _start_recording():
 	recording_start_time = Time.get_unix_time_from_system()
 	position_history.clear()
 	timing_history.clear()
+	recording_duration = 0.0
 	_add_to_history(grid_pos)
 	current_position_start_time = recording_start_time
-	print("Recording started! Time remaining: ", "%.1f" % remaining_recording_time, "s")
 
 func _stop_recording():
 	if not is_recording: return
 	_play_echo_sound()
 	is_recording = false
+	echo_state = EchoState.READY
 	var current_time = Time.get_unix_time_from_system()
 	var time_spent_in_last_cell = current_time - current_position_start_time
 	_record_timing(time_spent_in_last_cell)
-	var recording_duration = current_time - recording_start_time
 	
-	if position_history.size() > 1:
-		echo_state = EchoState.PLAYBACK_READY
-		print("Recording stopped! Used ", "%.1f" % recording_duration, "s. Press quantum echo again to replay")
-	else:
-		echo_state = EchoState.READY
-		remaining_recording_time += recording_duration
-		remaining_recording_time = min(remaining_recording_time, max_recording_time)
-		print("No movement recorded, time refunded")
+	recording_duration = current_time - recording_start_time
+	
+	if position_history.size() <= 1:
+		recording_duration = 0.0
 
 func _force_stop_recording():
 	if not is_recording: return
 	_play_echo_sound()
 	is_recording = false
+	echo_state = EchoState.READY
 	var current_time = Time.get_unix_time_from_system()
 	var time_spent_in_last_cell = current_time - current_position_start_time
 	_record_timing(time_spent_in_last_cell)
 	
-	if position_history.size() > 1:
-		echo_state = EchoState.PLAYBACK_READY
-		print("Recording time exhausted! Press quantum echo to replay")
-	else:
-		echo_state = EchoState.READY
-		print("Recording time exhausted with no movement recorded")
+	recording_duration = current_time - recording_start_time
+	
+	if position_history.size() <= 1:
+		recording_duration = 0.0
 
+# MODIFIED: Allows playback as long as there is > 0 time.
 func _activate_echo():
-	if position_history.size() == 0:
-		echo_state = EchoState.READY
+	if is_recording:
+		return
+
+	if position_history.size() <= 1 or recording_duration == 0.0:
+		return
+	
+	if remaining_recording_time <= 0:
 		return
 	
 	_play_echo_sound()
-	quantum_echo = QuantumEchoScene.instantiate()
-	get_parent().add_child(quantum_echo)
-	quantum_echo.setup(position_history, timing_history, self, level_loader, animated_sprite)
-	echo_active = true
-	echo_state = EchoState.PLAYING
-	print("Quantum Echo activated! Press quantum echo again to cancel")
-
-func _deactivate_echo():
-	_play_echo_sound()
-	if quantum_echo:
-		quantum_echo.cleanup()
-		quantum_echo = null
 	
-	echo_active = false
-	echo_plates.clear()
-	position_history.clear()
-	timing_history.clear()
-	echo_state = EchoState.READY
-	print("Quantum Echo deactivated")
+	var new_echo = QuantumEchoScene.instantiate()
+	get_parent().add_child(new_echo)
+	new_echo.setup(position_history, timing_history, self, level_loader, animated_sprite)
+	active_echos.append(new_echo)
+	
+	emit_signal("echo_created", new_echo)
+	
 
-func _on_echo_finished():
-	_deactivate_echo()
+func _on_echo_finished(echo_instance: QuantumEcho):
+	if active_echos.has(echo_instance):
+		active_echos.erase(echo_instance)
+
+func _deactivate_all_echos():
+	for echo in active_echos.duplicate():
+		echo.cleanup()
+	active_echos.clear()
 
 func echo_entered_pressure_plate(pos: Vector2i):
 	if not echo_plates.has(pos):
@@ -321,16 +325,16 @@ func _world_to_grid(world_pos: Vector2) -> Vector2i:
 	return Vector2i(int(world_pos.x / cell_size), int(world_pos.y / cell_size))
 
 func reset_to_start(player_start_pos: Vector2i):
-	print("Player resetting to start position.")
 	for pos in player_plates:
 		if is_instance_valid(level_loader):
 			level_loader.deactivate_pressure_plate(pos)
 	player_plates.clear()
 	
-	if echo_active: _deactivate_echo()
+	_deactivate_all_echos()
 	is_recording = false
 	echo_state = EchoState.READY
 	remaining_recording_time = max_recording_time
+	recording_duration = 0.0
 	_set_grid_position(player_start_pos)
 	position_history.clear()
 	timing_history.clear()
@@ -341,9 +345,10 @@ func reset_to_start(player_start_pos: Vector2i):
 		ui.on_level_generated(player_start_pos)
 
 func get_recording_status() -> String:
-	match echo_state:
-		EchoState.READY: return "Ready to record (%.1fs remaining)" % remaining_recording_time
-		EchoState.RECORDING: return "Recording... (%.1fs left)" % remaining_recording_time
-		EchoState.PLAYBACK_READY: return "Ready to replay (%d positions)" % position_history.size()
-		EchoState.PLAYING: return "Playing quantum echo"
-	return "Unknown state"
+	if echo_state == EchoState.RECORDING:
+		return "Recording... (Press R to stop)"
+	
+	if recording_duration > 0:
+		return "Ready (Press Q to play, R to re-record)"
+	
+	return "Ready (Press R to record)"

@@ -6,6 +6,7 @@ const GoalScene = preload("res://scenes/Goal.tscn")
 const wall_sprite = preload("res://assets/art/wall.png")
 const floor_sprite = preload("res://assets/art/floor.png")
 const door_sprite = preload("res://assets/art/door.png")
+const door_open_sprite = preload("res://assets/art/door_open.png")
 const gate_sprite = preload("res://assets/art/gate.png")
 const switch_on_sprite = preload("res://assets/art/switch_on.png")
 const switch_off_sprite = preload("res://assets/art/switch_off.png")
@@ -36,11 +37,12 @@ var plates: Dictionary = {}   # plate_pos -> is_on
 var gates: Dictionary = {}    # gate_pos -> is_open
 
 # Puzzle connections
-var door_switches: Dictionary = {}
-var plate_gates: Dictionary = {}
+var door_switches: Dictionary = {} # door_pos -> [switch_pos1, switch_pos2]
+var plate_gates: Dictionary = {}   # gate_pos -> [plate_pos1, plate_pos2]
 
 # --- Sprite Nodes ---
 var tile_sprites: Dictionary = {} # pos -> sprite_node
+var background_sprites: Array[Sprite2D] = []
 # --------------------
 
 # Collision bodies
@@ -65,8 +67,6 @@ func _ready():
 	_scan_for_levels()
 	if not level_files.is_empty():
 		generate()
-	else:
-		print("ERROR: No level files found in res://levels/. Please create level files like 'level1.txt'.")
 
 func _scan_for_levels():
 	level_files.clear()
@@ -79,94 +79,153 @@ func _scan_for_levels():
 				level_files.append(dir.get_current_dir().path_join(file_name))
 			file_name = dir.get_next()
 		level_files.sort() 
-		print("Found levels: ", level_files)
-	else:
-		print("Could not open directory res://levels/")
 
 
 func next_level():
-	print("Level complete! Loading next level...")
 	current_level_index = (current_level_index + 1)
 	if current_level_index >= level_files.size():
-		print("All levels completed! Looping back to first level.")
 		current_level_index = 0
 	generate()
 
 func generate():
 	_clear_level_objects()
 	if current_level_index >= level_files.size():
-		print("Error: Invalid level index.")
 		return
 		
 	var success = _load_level_from_file(level_files[current_level_index])
 	if success:
 		_create_collision_bodies()
 		_draw_level_sprites()
+		_update_doors()
+		_update_gates()
 		level_generated.emit(player_start_pos)
-		print("Successfully loaded level: ", level_files[current_level_index])
 
 func _load_level_from_file(file_path: String) -> bool:
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
-		print("ERROR: Could not open level file: ", file_path)
 		return false
 
-	var numbered_switches = {}
-	var numbered_doors = {}
+	# MODIFIED: Doors and gates now store arrays of positions
+	var numbered_switches = {} # "1" -> [pos1, pos2]
+	var numbered_doors = {}    # "1" -> [pos1, pos2]
+	var numbered_plates = {}   # "1" -> [pos1, pos2]
+	var numbered_gates = {}    # "1" -> [pos1, pos2]
 
 	var lines = []
-	var max_width = 0
 	while not file.eof_reached():
-		var line = file.get_line()
-		lines.append(line)
-		if line.length() > max_width:
-			max_width = line.length()
-	
-	grid_size = Vector2i(max_width, lines.size())
+		lines.append(file.get_line())
+	file.close()
+
+	var max_grid_width = 0
+	for line in lines:
+		var current_grid_width = 0
+		var i = 0
+		while i < line.length():
+			var char = line[i]
+			var next_char = line[i+1] if i + 1 < line.length() else ' '
+			if char.is_valid_int() and ['S', 'D', 'T', 'A'].has(next_char):
+				i += 2
+			else:
+				i += 1
+			current_grid_width += 1
+		if current_grid_width > max_grid_width:
+			max_grid_width = current_grid_width
+
+	grid_size = Vector2i(max_grid_width, lines.size())
 	
 	grid.clear()
 	for y in range(grid_size.y):
 		grid.append([])
-		for x in range(grid_size.x):
-			grid[y].append(false)
+		grid[y].resize(grid_size.x)
+		grid[y].fill(false)
 
 	for y in range(lines.size()):
 		var line = lines[y]
-		for x in range(line.length()):
+		var x = 0 
+		var grid_x = 0
+		while x < line.length():
 			var char = line[x]
-			var pos = Vector2i(x, y)
+			var pos = Vector2i(grid_x, y)
 			
-			match char:
-				'#': grid[y][x] = true
-				'P': player_start_pos = pos
-				'G': _create_goal(pos)
-				'S': switches[pos] = false
-				'D': doors[pos] = false
-				'R': reset_switches.append(pos)
-				'T': plates[pos] = false
-				'A': gates[pos] = false
-				'1', '2', '3', '4', '5', '6', '7', '8', '9':
-					var next_char = line[x+1] if x + 1 < line.length() else ' '
-					if next_char == 'S':
+			var is_numeric = char.is_valid_int()
+			var next_char = line[x+1] if x + 1 < line.length() else ' '
+			
+			if is_numeric and ['S', 'D', 'T', 'A'].has(next_char):
+				match next_char:
+					'S':
 						if not numbered_switches.has(char): numbered_switches[char] = []
 						numbered_switches[char].append(pos)
 						switches[pos] = false
-					elif next_char == 'D':
-						numbered_doors[char] = pos
+					'D':
+						# MODIFIED: Append to list instead of overwriting
+						if not numbered_doors.has(char): numbered_doors[char] = []
+						numbered_doors[char].append(pos)
 						doors[pos] = false
-					
-	var simple_switches = switches.keys().filter(func(p): return not door_switches.values().has(p))
-	var simple_doors = doors.keys().filter(func(p): return not door_switches.has(p))
-	if not simple_switches.is_empty() and not simple_doors.is_empty():
-		door_switches[simple_doors[0]] = [simple_switches[0]]
-		
-	for num_char in numbered_doors:
-		var d_pos = numbered_doors[num_char]
-		if numbered_switches.has(num_char):
-			door_switches[d_pos] = numbered_switches[num_char]
+					'T':
+						if not numbered_plates.has(char): numbered_plates[char] = []
+						numbered_plates[char].append(pos)
+						plates[pos] = false
+					'A':
+						# MODIFIED: Append to list instead of overwriting
+						if not numbered_gates.has(char): numbered_gates[char] = []
+						numbered_gates[char].append(pos)
+						gates[pos] = false
+				x += 2
+			else:
+				match char:
+					'#': grid[y][grid_x] = true
+					'P': player_start_pos = pos
+					'G': _create_goal(pos)
+					'S': switches[pos] = false
+					'D': doors[pos] = false
+					'R': reset_switches.append(pos)
+					'T': plates[pos] = false
+					'A': gates[pos] = false
+					' ': pass
+				x += 1
+			
+			grid_x += 1
 
-	var unlinked_plates = plates.keys().filter(func(p): return not plate_gates.has(p))
-	var unlinked_gates = gates.keys().filter(func(p): return not plate_gates.values().has(p))
+	# MODIFIED: Loop through door positions to link them
+	for num_char in numbered_doors:
+		if numbered_switches.has(num_char):
+			for d_pos in numbered_doors[num_char]:
+				door_switches[d_pos] = numbered_switches[num_char]
+			
+	# MODIFIED: Loop through gate positions to link them
+	for num_char in numbered_gates:
+		if numbered_plates.has(num_char):
+			for g_pos in numbered_gates[num_char]:
+				plate_gates[g_pos] = numbered_plates[num_char]
+
+	# --- Auto-link un-numbered switches and doors ---
+	var unlinked_switches = switches.keys().filter(func(s):
+		for door in door_switches:
+			if door_switches[door].has(s): return false
+		return true
+	)
+	var unlinked_doors = doors.keys().filter(func(d): return not door_switches.has(d))
+	
+	for d_pos in unlinked_doors:
+		var best_s_pos = Vector2i.ZERO
+		var min_dist = INF
+		for s_pos in unlinked_switches:
+			var d = d_pos.distance_squared_to(s_pos)
+			if d < min_dist:
+				min_dist = d
+				best_s_pos = s_pos
+		if best_s_pos != Vector2i.ZERO:
+			door_switches[d_pos] = [best_s_pos]
+			unlinked_switches.erase(best_s_pos)
+
+	# --- Auto-link un-numbered plates and gates ---
+	var unlinked_plates = plates.keys().filter(func(p):
+		for gate in plate_gates:
+			if plate_gates[gate].has(p): return false
+		return true
+	)
+	var unlinked_gates = gates.keys().filter(func(g): return not plate_gates.has(g))
+
 	for p_pos in unlinked_plates:
 		var best_g_pos = Vector2i.ZERO
 		var min_dist = INF
@@ -176,7 +235,9 @@ func _load_level_from_file(file_path: String) -> bool:
 				min_dist = d
 				best_g_pos = g_pos
 		if best_g_pos != Vector2i.ZERO:
-			plate_gates[p_pos] = best_g_pos
+			if not plate_gates.has(best_g_pos):
+				plate_gates[best_g_pos] = []
+			plate_gates[best_g_pos].append(p_pos)
 			unlinked_gates.erase(best_g_pos)
 			
 	return true
@@ -186,8 +247,6 @@ func _create_goal(pos: Vector2i):
 	goal_instance.position = Vector2(pos.x * cell_size, pos.y * cell_size)
 	goal_instance.body_entered.connect(_on_goal_entered)
 	add_child(goal_instance)
-	# The goal scene has its own sprite, so we store a reference to the instance itself for cleanup
-	tile_sprites[pos] = goal_instance
 
 func get_maze_size() -> Vector2i: return grid_size
 func get_current_level_index() -> int: return current_level_index
@@ -207,6 +266,10 @@ func _clear_level_objects():
 		goal_instance.queue_free()
 		goal_instance = null
 
+	for sprite in background_sprites:
+		if is_instance_valid(sprite): sprite.queue_free()
+	background_sprites.clear()
+	
 	for pos in tile_sprites:
 		if is_instance_valid(tile_sprites[pos]):
 			tile_sprites[pos].queue_free()
@@ -277,7 +340,6 @@ func toggle_switch(pos: Vector2i):
 			switch_off_sound.play()
 		for switch_pos in switches:
 			switches[switch_pos] = false
-		print("Reset switch activated!")
 	elif switches.has(pos):
 		switches[pos] = not switches[pos]
 		if switches[pos]:
@@ -308,7 +370,7 @@ func deactivate_pressure_plate(pos: Vector2i):
 
 func _update_doors():
 	for door_pos in door_switches:
-		var was_open = doors[door_pos]
+		var was_open = doors.get(door_pos, false)
 		var required_switches = door_switches[door_pos]
 		var all_switches_on = true
 		for switch_pos in required_switches:
@@ -324,16 +386,22 @@ func _update_doors():
 		elif not is_open and was_open:
 			if is_instance_valid(door_close_sound): door_close_sound.play()
 			
-		if is_instance_valid(door_bodies[door_pos]):
+		if door_bodies.has(door_pos) and is_instance_valid(door_bodies[door_pos]):
 			door_bodies[door_pos].get_child(0).disabled = is_open
 		
 		_update_door_sprite(door_pos)
 
 func _update_gates():
-	for plate_pos in plate_gates:
-		var gate_pos = plate_gates[plate_pos]
-		var was_open = gates[gate_pos]
-		var is_open = plates[plate_pos]
+	for gate_pos in plate_gates:
+		var was_open = gates.get(gate_pos, false)
+		var required_plates = plate_gates[gate_pos]
+		var all_plates_on = true
+		for plate_pos in required_plates:
+			if not plates.get(plate_pos, false):
+				all_plates_on = false
+				break
+		
+		var is_open = all_plates_on
 		gates[gate_pos] = is_open
 
 		if is_open and not was_open:
@@ -341,7 +409,7 @@ func _update_gates():
 		elif not is_open and was_open:
 			if is_instance_valid(door_close_sound): door_close_sound.play()
 
-		if is_instance_valid(gate_bodies[gate_pos]):
+		if gate_bodies.has(gate_pos) and is_instance_valid(gate_bodies[gate_pos]):
 			gate_bodies[gate_pos].get_child(0).disabled = is_open
 		
 		_update_gate_sprite(gate_pos)
@@ -351,17 +419,20 @@ func _draw_level_sprites():
 		for x in range(grid_size.x):
 			var pos = Vector2i(x, y)
 			if grid[y][x]:
-				_create_sprite_at(pos, wall_sprite, 1, false) # Walls
-			elif not goal_instance or not pos == _world_to_grid(goal_instance.position):
+				_create_sprite_at(pos, wall_sprite, -1, false) # Walls
+			else:
 				_create_sprite_at(pos, floor_sprite, -1, false) # Floor
+
+	if is_instance_valid(goal_instance):
+		_create_sprite_at(_world_to_grid(goal_instance.position), floor_sprite, -1, false)
 	
 	for pos in plates: _create_sprite_at(pos, plate_off_sprite, 0)
-	for pos in switches: _create_sprite_at(pos, switch_off_sprite)
-	for pos in reset_switches: _create_sprite_at(pos, reset_switch_sprite)
-	for pos in doors: _create_sprite_at(pos, door_sprite)
-	for pos in gates: _create_sprite_at(pos, gate_sprite)
+	for pos in switches: _create_sprite_at(pos, switch_off_sprite, 0)
+	for pos in reset_switches: _create_sprite_at(pos, reset_switch_sprite, 0)
+	for pos in doors: _create_sprite_at(pos, door_sprite, 0)
+	for pos in gates: _create_sprite_at(pos, gate_sprite, 0)
 
-func _create_sprite_at(pos: Vector2i, texture: Texture2D, z_index = 1, store = true):
+func _create_sprite_at(pos: Vector2i, texture: Texture2D, z_index = 0, store = true):
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
 	sprite.position = Vector2(pos.x * cell_size + cell_size / 2, pos.y * cell_size + cell_size / 2)
@@ -370,9 +441,7 @@ func _create_sprite_at(pos: Vector2i, texture: Texture2D, z_index = 1, store = t
 	if store:
 		tile_sprites[pos] = sprite
 	else:
-		# For non-interactive sprites like walls and floor, just store them in a temp array for cleanup
-		if not tile_sprites.has("background"): tile_sprites["background"] = []
-		tile_sprites["background"].append(sprite)
+		background_sprites.append(sprite)
 
 
 func _update_switch_sprites():
@@ -382,15 +451,15 @@ func _update_switch_sprites():
 
 func _update_door_sprite(pos: Vector2i):
 	if tile_sprites.has(pos):
-		tile_sprites[pos].visible = not doors[pos]
+		tile_sprites[pos].texture = door_open_sprite if doors.get(pos, false) else door_sprite
 
 func _update_gate_sprite(pos: Vector2i):
 	if tile_sprites.has(pos):
-		tile_sprites[pos].visible = not gates[pos]
+		tile_sprites[pos].visible = not gates.get(pos, false)
 
 func _update_plate_sprite(pos: Vector2i):
 	if tile_sprites.has(pos):
-		tile_sprites[pos].texture = plate_on_sprite if plates[pos] else plate_off_sprite
+		tile_sprites[pos].texture = plate_on_sprite if plates.get(pos, false) else plate_off_sprite
 
 func has_switch_at(pos: Vector2i) -> bool:
 	return switches.has(pos) or reset_switches.has(pos)
@@ -402,8 +471,8 @@ func _world_to_grid(world_pos: Vector2) -> Vector2i:
 
 func _on_goal_entered(body):
 	if body is Player:
-		print("Player reached the goal!")
 		if is_instance_valid(level_completed_sound):
 			level_completed_sound.play()
-			await level_completed_sound.finished
+		# Wait for a short duration instead of the full sound length
+		await get_tree().create_timer(0.5).timeout
 		next_level()

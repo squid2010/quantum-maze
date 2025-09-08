@@ -4,6 +4,7 @@
 [ext_resource type="AudioStream" uid="uid://d0uxvq6426kwy" path="res://assets/sound/echo_playback.mp3" id="2_sound"]
 
 [node name="QuantumEcho" type="AnimatedSprite2D"]
+texture_filter = 1
 script = ExtResource("1_0wxir")
 
 [node name="PlaybackSound" type="AudioStreamPlayer" parent="."]
