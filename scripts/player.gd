@@ -3,16 +3,16 @@ class_name Player
 
 @export var move_speed: float = 200.0
 @export var cell_size: int = 32
-@export var max_recording_time: float = 10.0
+@export var max_recording_time: float = 5.0
 @export var grid_snap_threshold: float = 0.8
 
 const QuantumEchoScene = preload("res://scenes/QuantumEcho.tscn")
 
 var grid_pos: Vector2i = Vector2i(1, 1)
 var is_moving: bool = false
-var input_buffer: Vector2 = Vector2.ZERO
+var input_dir: Vector2 = Vector2.ZERO
 var last_grid_pos: Vector2i = Vector2i(1, 1)
-var facing_direction: Vector2 = Vector2.DOWN
+var last_move_dir: Vector2 = Vector2.DOWN
 
 var position_history: Array[Vector2i] = []
 var timing_history: Array[float] = []
@@ -49,15 +49,32 @@ func _ready():
 	_set_grid_position(Vector2i(1, 1))
 	current_position_start_time = Time.get_unix_time_from_system()
 	_check_plate_interaction()
-	_update_animation()
 
 func _physics_process(delta):
 	_handle_input()
 	_handle_movement(delta)
+	_update_animation()
 	_update_grid_position()
 	_update_recording_time(delta)
 	_check_for_tutorial_triggers()
-	_update_animation()
+
+func _update_animation():
+	var animation_name = "idle"
+	var direction_name = "down"
+
+	if last_move_dir.x > 0:
+		direction_name = "right"
+	elif last_move_dir.x < 0:
+		direction_name = "left"
+	elif last_move_dir.y > 0:
+		direction_name = "down"
+	elif last_move_dir.y < 0:
+		direction_name = "up"
+	
+	if is_moving:
+		animation_name = "walk"
+	
+	animated_sprite.play(animation_name + "_" + direction_name)
 
 func is_tutorial_level() -> bool:
 	if is_instance_valid(level_loader) and level_loader.get_current_level_index() < level_loader.level_files.size():
@@ -80,38 +97,12 @@ func _handle_input():
 		_interact()
 		return
 	
-	var input_dir = Vector2.ZERO
-	if Input.is_action_pressed("move_up"): input_dir.y -= 1
-	if Input.is_action_pressed("move_down"): input_dir.y += 1
-	if Input.is_action_pressed("move_left"): input_dir.x -= 1
-	if Input.is_action_pressed("move_right"): input_dir.x += 1
+	input_dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	
 	if input_dir.length() > 0:
+		last_move_dir = input_dir
 		if is_tutorial_level():
 			ui.show_tutorial("MOVE")
-		facing_direction = input_dir.normalized()
-	
-	input_buffer = input_dir.normalized()
-
-func _update_animation():
-	var anim_name = "idle"
-	if is_moving:
-		anim_name = "walk"
-	
-	var direction_name = "down"
-	if facing_direction.y < 0:
-		direction_name = "up"
-	elif facing_direction.y > 0:
-		direction_name = "down"
-	elif facing_direction.x < 0:
-		direction_name = "left"
-	elif facing_direction.x > 0:
-		direction_name = "right"
-		
-	var new_animation = anim_name + "_" + direction_name
-	
-	if animated_sprite.animation != new_animation:
-		animated_sprite.play(new_animation)
 
 func _check_for_tutorial_triggers():
 	if not is_instance_valid(ui): return
@@ -164,8 +155,8 @@ func _handle_quantum_echo_button():
 		EchoState.PLAYING: _deactivate_echo()
 
 func _handle_movement(delta):
-	if input_buffer.length() > 0:
-		velocity = input_buffer * move_speed
+	if input_dir.length() > 0:
+		velocity = input_dir * move_speed
 		is_moving = true
 	else:
 		velocity = Vector2.ZERO
@@ -345,7 +336,6 @@ func reset_to_start(player_start_pos: Vector2i):
 	timing_history.clear()
 	current_position_start_time = Time.get_unix_time_from_system()
 	_check_plate_interaction()
-	_update_animation()
 	
 	if is_instance_valid(ui):
 		ui.on_level_generated(player_start_pos)

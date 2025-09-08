@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Quantum-Maze"
-run/main_scene="uid://0g4wr2meuvjg"
+run/main_scene="uid://cn66f1khhhdm"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
 

@@ -1,4 +1,4 @@
-extends Sprite2D
+extends AnimatedSprite2D
 class_name QuantumEcho
 
 @export var cell_size: int = 32
@@ -14,6 +14,7 @@ var grid_pos: Vector2i
 var last_grid_pos: Vector2i
 var target_world_pos: Vector2
 var start_world_pos: Vector2
+var last_move_dir: Vector2 = Vector2.DOWN
 
 var timer: float = 0.0
 var current_duration: float = 0.0
@@ -32,8 +33,8 @@ func setup(echo_path: Array[Vector2i], echo_timings: Array[float], player: Playe
 	player_ref = player
 	loader_ref = loader
 	
-	# Use the first frame of the current animation for the echo's texture
-	texture = original_sprite.sprite_frames.get_frame_texture(original_sprite.animation, 0)
+	# Copy animations and appearance from the player's sprite
+	self.sprite_frames = original_sprite.sprite_frames
 	scale = original_sprite.get_parent().scale
 	modulate = Color(0.7, 1.0, 1.0, 0.6)
 	
@@ -73,9 +74,28 @@ func _process(delta):
 			_handle_position_change(_world_to_grid(start_world_pos), grid_pos)
 			_start_pause()
 
+func _update_animation():
+	var animation_name = "idle"
+	var direction_name = "down"
+
+	if last_move_dir.x > 0:
+		direction_name = "right"
+	elif last_move_dir.x < 0:
+		direction_name = "left"
+	elif last_move_dir.y > 0:
+		direction_name = "down"
+	elif last_move_dir.y < 0:
+		direction_name = "up"
+	
+	if state == State.MOVING:
+		animation_name = "walk"
+	
+	self.play(animation_name + "_" + direction_name)
+
 func _start_pause():
 	timer = 0.0
 	state = State.PAUSED
+	_update_animation()
 	
 	if current_path_index < timings.size():
 		current_duration = timings[current_path_index]
@@ -96,6 +116,12 @@ func _start_move():
 	current_duration = 0.2
 	start_world_pos = position
 	target_world_pos = _grid_to_world(path[current_path_index])
+	
+	var move_dir = (target_world_pos - start_world_pos).normalized()
+	if move_dir.length_squared() > 0:
+		last_move_dir = move_dir
+	
+	_update_animation()
 
 func _ease_in_out(t: float) -> float: return t * t * (3.0 - 2.0 * t)
 
